@@ -1,24 +1,22 @@
-"""Reconhecimento contínuo na webcam do computador conectado ao Arduino."""
+"""Detecção automática de rostos na webcam para controlar a lâmpada via Arduino."""
 
 import argparse
 import logging
 import time
-from pathlib import Path
 
 import cv2
 import serial
 from serial.tools import list_ports
 
-from vision.faces import FaceEngine
+from vision.faces import FaceDetector
 from vision.relay import ArduinoRelay, LampPolicy, SimulatedRelay
 
 LOG = logging.getLogger(__name__)
 
 
 def run(args: argparse.Namespace) -> None:
-    engine = FaceEngine(Path(args.data_dir), args.threshold)
-    engine.train()
-    policy = LampPolicy(args.confirmations, args.hold)
+    detector = FaceDetector()
+    policy = LampPolicy(args.on_delay, args.off_delay)
     relay = SimulatedRelay() if args.simulate else ArduinoRelay(args.port)
     camera = None
     try:
@@ -32,26 +30,31 @@ def run(args: argparse.Namespace) -> None:
         last_send = float("-inf")
         previous_state = None
         previous_status = None
-        LOG.info("Monitor ativo. Pressione Ctrl+C para encerrar e apagar a lâmpada.")
+        LOG.info(
+            "Câmera ativa: qualquer rosto liga após %g s; ausência desliga após %g s. "
+            "Pressione Ctrl+C para encerrar e apagar a lâmpada.",
+            args.on_delay,
+            args.off_delay,
+        )
         while True:
             ok, frame = camera.read()
             if not ok:
                 raise RuntimeError("A câmera parou de fornecer imagens.")
-            result = engine.recognize(frame)
+            faces = detector.detect(frame)
             now = time.monotonic()
-            state = policy.update(result.matched, now, force_off=result.status == "multiple_faces")
+            state = policy.update(bool(faces), now)
             if state != previous_state or now - last_send >= 0.5:
                 relay.set_state(state)
                 last_send = now
                 previous_state = state
-            if result.status != previous_status:
+            status = (len(faces), state)
+            if status != previous_status:
                 LOG.info(
-                    "Rosto: %s | lâmpada: %s | distância LBPH: %s",
-                    result.status,
+                    "Rostos detectados: %d | lâmpada: %s",
+                    len(faces),
                     "ligada" if state else "desligada",
-                    result.distance,
                 )
-                previous_status = result.status
+                previous_status = status
             time.sleep(0.05)
     finally:
         if camera is not None:
@@ -70,16 +73,17 @@ def main() -> int:
     parser.add_argument("--port", help="Porta do Arduino, por exemplo COM3 no Windows.")
     parser.add_argument("--simulate", action="store_true", help="Usa webcam e simula o relé.")
     parser.add_argument("--camera", type=int, default=0)
-    parser.add_argument("--data-dir", default="data")
     parser.add_argument(
-        "--threshold",
+        "--on-delay",
         type=float,
-        default=65.0,
-        help="Distância LBPH máxima; menor é mais rigoroso. Não é porcentagem.",
+        default=5.0,
+        help="Segundos contínuos com rosto antes de ligar (padrão: 5).",
     )
-    parser.add_argument("--confirmations", type=int, default=3)
     parser.add_argument(
-        "--hold", type=float, default=5.0, help="Segundos até apagar após perder o rosto."
+        "--off-delay",
+        type=float,
+        default=5.0,
+        help="Segundos contínuos sem rosto antes de desligar (padrão: 5).",
     )
     args = parser.parse_args()
     if args.list_ports:

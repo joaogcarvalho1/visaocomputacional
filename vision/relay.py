@@ -1,5 +1,6 @@
 """Protocolo serial com confirmação e política temporal de acionamento."""
 
+import math
 import time
 from dataclasses import dataclass
 
@@ -8,24 +9,26 @@ import serial
 
 @dataclass
 class LampPolicy:
-    confirmations: int = 3
-    hold_seconds: float = 5.0
-    consecutive: int = 0
-    authorized_until: float = float("-inf")
+    on_delay: float = 5.0
+    off_delay: float = 5.0
+    state: bool = False
+    pending_since: float | None = None
 
     def __post_init__(self):
-        if self.confirmations < 1 or self.hold_seconds < 0:
-            raise ValueError("Confirmações deve ser positivo e duração não pode ser negativa.")
+        if any(not math.isfinite(delay) or delay < 0 for delay in (self.on_delay, self.off_delay)):
+            raise ValueError("Os atrasos devem ser números finitos maiores ou iguais a zero.")
 
-    def update(self, recognized: bool, now: float, *, force_off: bool = False) -> bool:
-        if force_off:
-            self.consecutive = 0
-            self.authorized_until = float("-inf")
-            return False
-        self.consecutive = self.consecutive + 1 if recognized else 0
-        if self.consecutive >= self.confirmations:
-            self.authorized_until = now + self.hold_seconds
-        return now <= self.authorized_until
+    def update(self, face_present: bool, now: float) -> bool:
+        if face_present == self.state:
+            self.pending_since = None
+            return self.state
+        if self.pending_since is None:
+            self.pending_since = now
+        delay = self.on_delay if face_present else self.off_delay
+        if now - self.pending_since >= delay:
+            self.state = face_present
+            self.pending_since = None
+        return self.state
 
 
 class ArduinoRelay:

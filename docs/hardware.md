@@ -1,6 +1,6 @@
 # Hardware: Arduino Uno, módulo relé 5 V e lâmpada 127/220 V
 
-O computador reconhece o rosto e envia comandos pela porta USB. O Uno apenas controla a entrada de um **módulo relé com driver**, alimentado conforme a especificação do fabricante. Um relé avulso não deve ser ligado diretamente ao pino do Arduino: a bobina precisa de circuito de acionamento e proteção.
+O computador detecta qualquer rosto na webcam e envia comandos pela porta USB após os atrasos de cinco segundos para ligar/desligar. O Uno apenas controla a entrada de um **módulo relé com driver**, alimentado conforme a especificação do fabricante. Um relé avulso não deve ser ligado diretamente ao pino do Arduino: a bobina precisa de circuito de acionamento e proteção.
 
 ## Lado de controle — baixa tensão
 
@@ -28,8 +28,8 @@ Não há ligação direta entre o circuito USB de controle e a rede elétrica. A
 
 1. Mantenha a rede elétrica desconectada. Grave o sketch e confira a porta COM.
 2. Teste a lógica do módulo e o LED embutido, ainda sem carga de rede.
-3. Cadastre o rosto, teste uma imagem nova e teste pessoas não cadastradas.
-4. Execute o monitor. Confira acionamento após três confirmações e desligamento após a ausência do rosto.
+3. Execute `vision.monitor --simulate` e confirme que a webcam detecta rostos continuamente.
+4. Execute o monitor com a porta COM. Confira acionamento após cinco segundos contínuos com rosto e desligamento após cinco segundos contínuos sem rosto. Confirme que mudanças durante os atrasos reiniciam as contagens.
 5. Interrompa o processo Python mantendo o Uno alimentado e confira o desligamento pelo watchdog em até três segundos.
 6. Peça ao profissional que conclua e teste a instalação da lâmpada em caixa fechada.
 

@@ -3,20 +3,20 @@ from argparse import Namespace
 import numpy as np
 import pytest
 
-from vision.faces import Recognition
-from vision.monitor import run
+from vision.monitor import main, run
 
 
-def test_camera_failure_stops_relay_and_releases_camera(monkeypatch):
-    class Engine:
-        def __init__(self, *args):
-            pass
+@pytest.mark.parametrize("face_count", [1, 2])
+@pytest.mark.parametrize("frame_limit", [4, 7])
+def test_automatic_monitor_delays_on_and_off_without_enrollment(
+    monkeypatch, tmp_path, face_count, frame_limit
+):
+    counts = iter([0, face_count, face_count, face_count, 0, 0, 0])
+    timestamps = iter([0, 1, 5.9, 6, 7, 11.9, 12])
 
-        def train(self):
-            pass
-
-        def recognize(self, frame):
-            return Recognition("recognized", 20)
+    class Detector:
+        def detect(self, frame):
+            return [(0, 0, 80, 80)] * next(counts)
 
     class Camera:
         reads = 0
@@ -30,14 +30,17 @@ def test_camera_failure_stops_relay_and_releases_camera(monkeypatch):
 
         def read(self):
             self.reads += 1
-            return (True, np.zeros((10, 10, 3), np.uint8)) if self.reads <= 3 else (False, None)
+            if self.reads <= frame_limit:
+                return True, np.zeros((100, 100, 3), np.uint8)
+            return False, None
 
         def release(self):
             self.released = True
 
     class Relay:
-        commands = []
-        closed = False
+        def __init__(self):
+            self.commands = []
+            self.closed = False
 
         def set_state(self, enabled):
             self.commands.append(enabled)
@@ -47,15 +50,25 @@ def test_camera_failure_stops_relay_and_releases_camera(monkeypatch):
             self.closed = True
 
     camera, relay = Camera(), Relay()
-    monkeypatch.setattr("vision.monitor.FaceEngine", Engine)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("vision.monitor.FaceDetector", Detector)
     monkeypatch.setattr("vision.monitor.cv2.VideoCapture", lambda *args: camera)
     monkeypatch.setattr("vision.monitor.SimulatedRelay", lambda: relay)
     monkeypatch.setattr("vision.monitor.time.sleep", lambda _: None)
-    args = Namespace(
-        data_dir="unused", threshold=65, confirmations=3, hold=5, simulate=True, camera=0
-    )
+    monkeypatch.setattr("vision.monitor.time.monotonic", lambda: next(timestamps))
+    args = Namespace(on_delay=5, off_delay=5, simulate=True, camera=0)
     with pytest.raises(RuntimeError, match="parou de fornecer"):
         run(args)
-    assert True in relay.commands
-    assert relay.commands[-1] is False
+    expected_frames = [False, False, False, True, True, True, False]
+    assert relay.commands == expected_frames[:frame_limit] + [False]
     assert camera.released and relay.closed
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_cli_defaults_to_five_seconds_and_needs_no_training_arguments(monkeypatch):
+    observed = []
+    monkeypatch.setattr("sys.argv", ["monitor", "--simulate"])
+    monkeypatch.setattr("vision.monitor.run", observed.append)
+    assert main() == 0
+    assert observed[0].on_delay == observed[0].off_delay == 5
+    assert not hasattr(observed[0], "data_dir")

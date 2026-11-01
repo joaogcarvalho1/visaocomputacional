@@ -1,18 +1,21 @@
-# Validação realizada
+# Validação da detecção automática
 
 Verificado em 1 de novembro de 2026 no ambiente Linux da nuvem, com Python 3.12.14.
 
 | Verificação | Resultado |
 | --- | --- |
-| Instalação por `uv sync --locked` | Concluída; repetição sem mudanças de dependências. |
-| `pytest -q` | 13 testes aprovados, nenhum pulado nessa execução. |
+| `pytest -q` | 22 testes aprovados, nenhum pulado nesta execução. |
 | Ruff: análise e formatação | Aprovadas. |
-| Interface Streamlit | Navegação das três etapas testada; servidor respondeu HTTP 200 na raiz e no health check. |
-| Detector Haar e LBPH reais | Cinco amostras derivadas de uma imagem de exemplo cadastradas; uma variação adicional foi reconhecida com distância 29,08 no limite 65. |
-| PySerial | OFF → ON → OFF confirmado por um emulador em pseudoterminal Linux. |
-| Sketch Arduino | Código real compilado e executado em um simulador C++ de GPIO, serial e relógio: boot desligado, comandos, rejeição de mensagens inválidas e watchdog aprovados. |
-| Windows e câmera física | Não executados neste ambiente Linux; instruções fornecidas e job Windows configurado no CI. |
-| Compilação AVR e gravação no Uno | Pendentes no Arduino IDE; o teste C++ simula a lógica, não a placa. |
-| Relé e lâmpada de 127/220 V | Não conectados à nuvem; exigem comissionamento físico. |
+| Detector Haar real | Detectou um rosto, dois rostos e nenhum rosto nos respectivos quadros de teste. Não exige cadastro ou arquivos de amostras. |
+| Atrasos | Luz apagada antes de cinco segundos de presença, ligada no limite de cinco; desligamento após cinco segundos de ausência. |
+| Mudança de condição | Interrupções reiniciam a contagem de ligar; retorno do rosto cancela a contagem de desligar. |
+| Monitor com câmera simulada | Um ou dois rostos acionam a mesma lógica. Falha da câmera libera o dispositivo e envia desligamento, inclusive se a luz estiver ligada. |
+| Protocolo serial | Testes verificam OFF inicial, ON/OFF confirmado, erro de confirmação e fechamento da porta. |
+| Guia Streamlit | Monta o comando com a COM e atrasos selecionados; rejeita porta inválida. |
+| Firmware | Sketch real executado com GPIO, relógio e serial simulados em C++: boot desligado, comandos, mensagens inválidas e watchdog aprovados. |
+| Windows e câmera física | Não executados na nuvem Linux; dependem do computador do usuário. |
+| Compilação AVR, gravação no Uno e rede 127/220 V | Exigem Arduino IDE e comissionamento físico. O teste C++ simula a lógica, não a placa. |
 
-O teste do detector usou a [imagem de exemplo astronaut do scikit-image](https://github.com/scikit-image/scikit-image/blob/v0.19.3/skimage/data/astronaut.png) somente em diretório temporário. Nenhum rosto de exemplo foi incluído no cadastro ou no projeto. Variações sintéticas da mesma imagem validam a execução do pipeline, **não medem acurácia**, resistência a fotos ou desempenho com pessoas diferentes. Faça a calibração no ambiente real com a pessoa autorizada e com pessoas não cadastradas antes de conectar a carga.
+O teste do detector real usou a [imagem pública astronaut do scikit-image](https://github.com/scikit-image/scikit-image/blob/v0.19.3/skimage/data/astronaut.png), uma composição com duas cópias e um quadro vazio, somente em diretório temporário. Nenhuma imagem foi incluída no projeto. Essa checagem demonstra a execução do detector; não mede taxa de acertos em diferentes câmeras e condições de iluminação.
+
+A versão atual não reconhece identidades, não usa LBPH e não lê nem grava fotos de cadastro. O watchdog do Arduino continua desligando após três segundos sem comando válido; esse mecanismo de falha é independente dos atrasos normais de cinco segundos.

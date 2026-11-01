@@ -1,7 +1,7 @@
 [project]
 name = "visaocomputacional"
 version = "0.1.0"
-description = "Reconhecimento de rosto cadastrado para controlar uma lâmpada via Arduino Uno."
+description = "Detecção automática de rostos com atrasos de 5 segundos para controlar a lâmpada via Arduino Uno."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
